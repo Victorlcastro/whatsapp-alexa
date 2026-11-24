@@ -1,0 +1,15 @@
+# Lista branca: ignora tudo e libera só o que é do projeto.
+/*
+!/.gitignore
+!/.env.example
+!/README.md
+!/LICENSE
+!/requirements.txt
+!/configurar.ps1
+!/compilar-wuzapi.ps1
+!/instalar-autostart.ps1
+!/ponte/
+/ponte/*
+!/ponte/server.py
+!/ponte/index.html
+!/ponte/falar_aviso.py

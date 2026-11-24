@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhatsApp → Alexa</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--tx:#1d2430;--mut:#667085;--bd:#e3e6ea;--ac:#128c7e;--ac2:#0e6f64;--warn:#b54708;--bad:#c0392b;--chip:#eef6f5}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1318;--card:#171c23;--tx:#e6e9ee;--mut:#9aa4b2;--bd:#2a313b;--ac:#25b39f;--ac2:#1f9786;--chip:#16302c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,Segoe UI,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:1px solid var(--bd);background:var(--card);position:sticky;top:0;z-index:2}
+header h1{font-size:18px;margin:0;flex:1}
+main{max-width:1000px;margin:0 auto;padding:18px 16px;display:grid;gap:16px;grid-template-columns:1fr 1fr}
+section{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px}
+section.full{grid-column:1/-1}
+@media(max-width:780px){main{grid-template-columns:1fr}}
+h2{font-size:15px;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+label{display:block;font-size:13px;color:var(--mut);margin:10px 0 4px}
+input[type=text],input[type=number],input[type=time],input[type=password]{width:100%;padding:8px 10px;border:1px solid var(--bd);border-radius:8px;background:transparent;color:var(--tx);font:inherit}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row>*{flex:1}
+.chk{display:flex;align-items:center;gap:8px;margin:8px 0;color:var(--tx);font-size:14px;cursor:pointer}
+.chk input{width:18px;height:18px;accent-color:var(--ac)}
+button{padding:8px 14px;border-radius:8px;border:1px solid var(--bd);background:transparent;color:var(--tx);font:inherit;cursor:pointer}
+button.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+button.pri:hover{background:var(--ac2)}
+button.sm{padding:4px 10px;font-size:13px}
+button.del{color:var(--bad)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--bd);vertical-align:middle}
+th{color:var(--mut);font-weight:500;font-size:12px}
+td input[type=text]{padding:5px 7px}
+.hint{font-size:12px;color:var(--mut);margin-top:6px}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bad);display:inline-block}
+.dot.on{background:#22c55e}
+#qr img{width:240px;height:240px;background:#fff;padding:8px;border-radius:8px}
+.grupos{max-height:220px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:6px 10px}
+.tag{font-size:12px;padding:2px 8px;border-radius:99px;background:var(--chip);white-space:nowrap}
+.tag.ig{background:transparent;color:var(--mut);border:1px solid var(--bd)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--tx);color:var(--bg);padding:10px 16px;border-radius:8px;opacity:0;transition:.2s;pointer-events:none}
+#toast.show{opacity:1}
+.sub{border-top:1px dashed var(--bd);margin-top:12px;padding-top:6px}
+.wrap{overflow-x:auto}
+</style>
+</head>
+<body>
+<header>
+  <h1>WhatsApp → Alexa</h1>
+  <label class="chk" style="margin:0"><input type="checkbox" id="ativo"> Avisos ligados</label>
+  <button class="pri" onclick="salvar()">Salvar</button>
+</header>
+<main>
+  <section>
+    <h2><span class="dot" id="dot"></span> Conexão WhatsApp</h2>
+    <div id="stTxt">Verificando…</div>
+    <div id="qr" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:10px">
+      <button onclick="conectar()">Conectar / mostrar QR</button>
+      <button class="del" onclick="desconectar()">Desconectar</button>
+    </div>
+    <div class="hint">No celular: WhatsApp → Aparelhos conectados → Conectar aparelho → escaneie o QR. O QR expira em ~1 min; se sumir, clique em Conectar de novo.</div>
+    <div class="sub" id="parearBox">
+      <label>Ou conectar com código (sem QR) — seu número com DDI+DDD</label>
+      <div class="row"><input type="text" id="fone" placeholder="5511987654321"><button style="flex:0;white-space:nowrap" onclick="parear()">Gerar código</button></div>
+      <div id="codigo" style="font:600 26px ui-monospace,monospace;letter-spacing:3px;margin-top:8px"></div>
+      <div class="hint">No celular: Aparelhos conectados → Conectar aparelho → "Conectar com número de telefone" e digite o código.</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Regras gerais</h2>
+    <label>Frase padrão (contatos sem frase própria)</label>
+    <input type="text" id="frase_padrao">
+    <div class="hint">Variáveis: {nome} {numero} {mensagem} {grupo}</div>
+    <label class="chk"><input type="checkbox" id="qualquer_contato"> Avisar de <b>qualquer</b> contato no privado (não só os da lista)</label>
+    <label class="chk"><input type="checkbox" id="ler_mensagem"> Ler também o texto da mensagem</label>
+    <div class="row">
+      <div><label>Intervalo mínimo por conversa (s)</label><input type="number" id="cooldown_seg" min="0"></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="sil_ativo"> Horário de silêncio</label>
+    <div class="row"><input type="time" id="sil_ini"><span style="flex:0">até</span><input type="time" id="sil_fim"></div>
+  </section>
+
+  <section class="full">
+    <h2>Contatos monitorados</h2>
+    <div class="wrap"><table>
+      <thead><tr><th style="width:34px">On</th><th>Número (com DDI+DDD)</th><th>Nome falado</th><th>Frase (opcional)</th><th></th></tr></thead>
+      <tbody id="contatos"></tbody>
+    </table></div>
+    <div class="row" style="margin-top:10px"><button onclick="addContato()" style="flex:0;white-space:nowrap">+ Adicionar contato</button></div>
+    <div class="hint">Ex.: 5511987654321. Números brasileiros com ou sem o 9 funcionam. Dica: quando alguém te mandar mensagem, aparece em "Atividade recente" com um botão para monitorar.</div>
+  </section>
+
+  <section>
+    <h2>Menções em grupos</h2>
+    <label class="chk"><input type="checkbox" id="men_ativo"> Avisar quando me marcarem (@) em grupo</label>
+    <label class="chk"><input type="checkbox" id="men_resp"> Contar também quando responderem uma mensagem minha</label>
+    <label>Frase</label>
+    <input type="text" id="men_frase">
+    <label>Grupos <span class="hint">(nenhum marcado = todos)</span></label>
+    <div class="grupos" id="grupos"><span class="hint">Conecte o WhatsApp e clique em carregar.</span></div>
+    <div class="row" style="margin-top:8px"><button class="sm" style="flex:0;white-space:nowrap" onclick="carregarGrupos()">Carregar grupos</button></div>
+  </section>
+
+  <section>
+    <h2>Saídas (como avisar)</h2>
+    <label class="chk"><input type="checkbox" id="pc_ativo"> Falar pelo PC (Echo Dot via Bluetooth)</label>
+    <label class="chk"><input type="checkbox" id="pc_som"> Tocar som de notificação antes</label>
+    <label>Reforço de volume da voz do PC: <b id="pc_ref_v"></b> dB</label>
+    <input type="range" id="pc_ref" min="0" max="20" step="1" style="width:100%;accent-color:var(--ac)" oninput="$('pc_ref_v').textContent=this.value">
+    <button class="sm" onclick="testar('pc')">Testar PC</button>
+
+    <div class="sub">
+      <label class="chk"><input type="checkbox" id="tc_ativo"> Alexa via TRIGGERcmd (rotina)</label>
+      <div class="row">
+        <div><label>Computador</label><input type="text" id="tc_pc"></div>
+        <div><label>Comando</label><input type="text" id="tc_cmd"></div>
+      </div>
+      <button class="sm" style="margin-top:8px" onclick="testar('triggercmd')">Testar TRIGGERcmd</button>
+      <div class="hint">A Alexa fala a frase fixa da rotina (não diz o nome). Plano grátis: no máx. 1 aviso por minuto.</div>
+    </div>
+
+    <div class="sub">
+      <label class="chk"><input type="checkbox" id="vm_ativo"> Anúncio na Alexa (Voice Monkey)</label>
+      <div class="row">
+        <div><label>Token</label><input type="password" id="vm_token" autocomplete="off"></div>
+        <div><label>Device (ID do speaker)</label><input type="text" id="vm_device"></div>
+      </div>
+      <div class="row">
+        <div><label>Voz</label><input type="text" id="vm_voice" placeholder="Ricardo, Camila, Vitoria…"></div>
+        <div><label>Chime (opcional)</label><input type="text" id="vm_chime" placeholder="soundbank://…"></div>
+      </div>
+      <button class="sm" style="margin-top:8px" onclick="testar('voicemonkey')">Testar Alexa</button>
+      <div class="hint">Funciona mesmo com o PC sem Bluetooth: a Alexa fala com a voz dela. Plano grátis: 200 avisos/mês.</div>
+    </div>
+
+    <div class="sub">
+      <label class="chk"><input type="checkbox" id="wh_ativo"> Chamar URL/webhook</label>
+      <input type="text" id="wh_url" placeholder="https://… (use {texto} na URL, ou recebe POST JSON)">
+      <button class="sm" style="margin-top:8px" onclick="testar('webhook')">Testar URL</button>
+    </div>
+  </section>
+
+  <section class="full">
+    <h2>Atividade recente <button class="sm" style="margin-left:auto" onclick="carregarEventos()">Atualizar</button></h2>
+    <div class="wrap"><table>
+      <thead><tr><th>Hora</th><th>De</th><th>Grupo</th><th>Mensagem</th><th>Resultado</th><th></th></tr></thead>
+      <tbody id="eventos"><tr><td colspan="6" class="hint">Nada ainda.</td></tr></tbody>
+    </table></div>
+  </section>
+</main>
+<div id="toast"></div>
+<script>
+let cfg = null, gruposLista = [];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(t){const e=$('toast');e.textContent=t;e.classList.add('show');clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove('show'),2600)}
+async function api(p, body){const r=await fetch(p, body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.json()}
+
+function render(){
+  $('ativo').checked=cfg.ativo; $('frase_padrao').value=cfg.frase_padrao;
+  $('qualquer_contato').checked=cfg.qualquer_contato; $('ler_mensagem').checked=cfg.ler_mensagem;
+  $('cooldown_seg').value=cfg.cooldown_seg;
+  $('sil_ativo').checked=cfg.silencio.ativo; $('sil_ini').value=cfg.silencio.inicio; $('sil_fim').value=cfg.silencio.fim;
+  $('men_ativo').checked=cfg.mencoes.ativo; $('men_resp').checked=cfg.mencoes.respostas_contam; $('men_frase').value=cfg.mencoes.frase;
+  const s=cfg.saidas;
+  $('pc_ativo').checked=s.pc.ativo; $('pc_som').checked=s.pc.som; $('pc_ref').value=s.pc.reforco??14; $('pc_ref_v').textContent=$('pc_ref').value;
+  $('vm_ativo').checked=s.voicemonkey.ativo; $('vm_token').value=s.voicemonkey.token; $('vm_device').value=s.voicemonkey.device;
+  $('vm_voice').value=s.voicemonkey.voice; $('vm_chime').value=s.voicemonkey.chime;
+  $('wh_ativo').checked=s.webhook.ativo; $('wh_url').value=s.webhook.url;
+  $('tc_ativo').checked=s.triggercmd.ativo; $('tc_pc').value=s.triggercmd.computador; $('tc_cmd').value=s.triggercmd.comando;
+  renderContatos(); renderGrupos();
+}
+function renderContatos(){
+  $('contatos').innerHTML = cfg.contatos.length ? cfg.contatos.map((c,i)=>`<tr>
+    <td><input type="checkbox" ${c.ativo!==false?'checked':''} onchange="cfg.contatos[${i}].ativo=this.checked"></td>
+    <td><input type="text" value="${esc(c.numero)}" oninput="cfg.contatos[${i}].numero=this.value"></td>
+    <td><input type="text" value="${esc(c.nome)}" oninput="cfg.contatos[${i}].nome=this.value"></td>
+    <td><input type="text" value="${esc(c.frase||'')}" placeholder="padrão" oninput="cfg.contatos[${i}].frase=this.value"></td>
+    <td><button class="sm del" onclick="cfg.contatos.splice(${i},1);renderContatos()">✕</button></td></tr>`).join('')
+    : '<tr><td colspan="5" class="hint">Nenhum contato ainda.</td></tr>';
+}
+function addContato(numero='', nome=''){cfg.contatos.push({numero,nome,frase:'',ativo:true});renderContatos()}
+function renderGrupos(){
+  if(!gruposLista.length){ if(cfg.mencoes.grupos.length) $('grupos').innerHTML=`<span class="hint">${cfg.mencoes.grupos.length} grupo(s) selecionado(s). Clique em carregar para ver.</span>`; return }
+  $('grupos').innerHTML = gruposLista.map(g=>`<label class="chk"><input type="checkbox" value="${esc(g.jid)}" ${cfg.mencoes.grupos.includes(g.jid)?'checked':''} onchange="togGrupo(this)"> ${esc(g.nome)}</label>`).join('');
+}
+function togGrupo(el){const a=cfg.mencoes.grupos;if(el.checked){if(!a.includes(el.value))a.push(el.value)}else cfg.mencoes.grupos=a.filter(x=>x!==el.value)}
+async function carregarGrupos(){$('grupos').innerHTML='<span class="hint">Carregando…</span>';gruposLista=await api('/api/grupos');if(!gruposLista.length)$('grupos').innerHTML='<span class="hint">Nenhum grupo (WhatsApp conectado?)</span>';else renderGrupos()}
+
+function coletar(){
+  cfg.ativo=$('ativo').checked; cfg.frase_padrao=$('frase_padrao').value;
+  cfg.qualquer_contato=$('qualquer_contato').checked; cfg.ler_mensagem=$('ler_mensagem').checked;
+  cfg.cooldown_seg=+$('cooldown_seg').value||0;
+  cfg.silencio={ativo:$('sil_ativo').checked,inicio:$('sil_ini').value||'23:00',fim:$('sil_fim').value||'07:00'};
+  Object.assign(cfg.mencoes,{ativo:$('men_ativo').checked,respostas_contam:$('men_resp').checked,frase:$('men_frase').value});
+  cfg.saidas={pc:{ativo:$('pc_ativo').checked,som:$('pc_som').checked,reforco:+$('pc_ref').value},
+    voicemonkey:{ativo:$('vm_ativo').checked,token:$('vm_token').value.trim(),device:$('vm_device').value.trim(),voice:$('vm_voice').value.trim(),chime:$('vm_chime').value.trim()},
+    webhook:{ativo:$('wh_ativo').checked,url:$('wh_url').value.trim()},
+    triggercmd:{ativo:$('tc_ativo').checked,computador:$('tc_pc').value.trim(),comando:$('tc_cmd').value.trim()||'Aviso Zap'}};
+  cfg.contatos=cfg.contatos.filter(c=>String(c.numero).replace(/\D/g,''));
+}
+async function salvar(silencioso){coletar();await api('/api/config',cfg);renderContatos();if(!silencioso)toast('Salvo ✔')}
+async function testar(saida){await salvar(true);const r=await api('/api/testar',{saida});toast((r.ok?'✔ ':'✖ ')+r.msg)}
+
+async function status(){
+  try{const s=await api('/api/status');
+    $('dot').classList.toggle('on',!!(s.connected&&s.loggedIn));
+    const logado=!!(s.connected&&s.loggedIn);
+    $('parearBox').style.display=logado?'none':'';
+    if(logado){$('stTxt').innerHTML=`Conectado como <b>${esc((s.jid||'').split('@')[0].split(':')[0])}</b>`;$('qr').innerHTML='';$('codigo').textContent=''}
+    else if(s.connected){$('stTxt').textContent='Aguardando leitura do QR / código…';
+      const q=await api('/api/qr');$('qr').innerHTML=q.qr?`<img src="${q.qr}" alt="QR">`:''}
+    else{$('stTxt').textContent='Desconectado (ou o QR expirou) — clique em Conectar';$('qr').innerHTML=''}
+  }catch(e){$('stTxt').textContent='Ponte sem resposta'}
+}
+async function conectar(){await api('/api/conectar',{});toast('Conectando…');setTimeout(status,2500)}
+async function parear(){$('codigo').textContent='gerando…';const r=await api('/api/parear',{telefone:$('fone').value});$('codigo').textContent=r.ok?r.codigo:'';if(!r.ok)toast('✖ '+r.msg)}
+async function desconectar(){if(!confirmarDesc())return;await api('/api/desconectar',{});status()}
+function confirmarDesc(){const b=event.target;if(b.dataset.ok){delete b.dataset.ok;b.textContent='Desconectar';return true}b.dataset.ok=1;b.textContent='Clique de novo p/ confirmar';setTimeout(()=>{delete b.dataset.ok;b.textContent='Desconectar'},3000);return false}
+
+async function carregarEventos(){
+  const ev=await api('/api/eventos');
+  $('eventos').innerHTML = ev.length ? ev.map(e=>{
+    const monit = cfg.contatos.some(c=>String(c.numero).replace(/\D/g,'')===e.numero);
+    const btn = (!e.grupo && e.numero && !monit) ? `<button class="sm" onclick='addContato(${JSON.stringify(e.numero)},${JSON.stringify(e.pushname||"")});salvar();carregarEventos()'>+ monitorar</button>`:'';
+    const ok = e.acao==='aviso'||e.acao==='menção';
+    return `<tr><td>${esc(e.hora)}</td><td>${esc(e.nome)}<div class="hint">${esc(e.numero)}</div></td><td>${esc(e.grupo)}</td><td>${esc(e.texto)}</td><td><span class="tag ${ok?'':'ig'}" title="${esc(e.fala||'')}">${esc(e.acao)}</span></td><td>${btn}</td></tr>`}).join('')
+    : '<tr><td colspan="6" class="hint">Nada ainda.</td></tr>';
+}
+(async()=>{cfg=await api('/api/config');render();status();carregarEventos();
+  setInterval(status,4000);setInterval(carregarEventos,5000)})();
+</script>
+</body>
+</html>
